@@ -202,9 +202,9 @@ class DeepSpeedHybridEngine(DeepSpeedEngine):
                             if len(self.all_lora_params) > 0:
                                 self._fuse_lora_layer(layer_id)
 
-                            if self.mpu is not None:
-                                self._inference_containers[layer_id].apply_tensor_parallelism(self.mp_replace,
-                                                                                              reversed_dim=True)
+                            # if self.mpu is not None:
+                            self._inference_containers[layer_id].apply_tensor_parallelism(self.mp_replace,
+                                                                                            reversed_dim=True)
 
                 # TODO(cmikeh2) Evaluate if this can be deferred when release_inference_cache
                 # is enabled.
@@ -215,17 +215,25 @@ class DeepSpeedHybridEngine(DeepSpeedEngine):
 
                 input_shape = inputs[0].shape if len(inputs) > 0 else \
                                 kwargs['input_ids'].shape
-                output = torch.zeros(
+                gathered_input = torch.zeros(
                     (input_shape[0] * self._config.hybrid_engine.inference_tp_size, ) + input_shape[1:],
                     dtype=inputs[0].dtype if len(inputs) > 0 else kwargs['input_ids'].dtype,
                     device=inputs[0].device if len(inputs) > 0 else kwargs['input_ids'].device)
                 input_cont = inputs[0].contiguous() if len(inputs) > 0 else kwargs['input_ids'].contiguous()
-                dist.all_gather_into_tensor(output, input_cont, group=self.mp_group)
+                dist.all_gather_into_tensor(gathered_input, input_cont, group=self.mp_group)
+
+                gathered_mask = torch.zeros(
+                    (input_shape[0] * self._config.hybrid_engine.inference_tp_size, ) + input_shape[1:],
+                    dtype=kwargs['attention_mask'].dtype,
+                    device=kwargs['attention_mask'].device)
+                mask_cont = kwargs['attention_mask'].contiguous()
+                dist.all_gather_into_tensor(gathered_mask, mask_cont, group=self.mp_group)
+                kwargs['attention_mask'] = gathered_mask
 
                 if len(inputs) > 0:
-                    inputs = (output, *inputs[1:])
+                    inputs = (gathered_input, *inputs[1:])
                 else:
-                    kwargs['input_ids'] = output
+                    kwargs['input_ids'] = gathered_input
 
                 self.retake_inference_cache()
 

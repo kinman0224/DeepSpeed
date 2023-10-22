@@ -36,17 +36,28 @@ class HybridGatedMLPContainer(HybridEngineContainer):
     def mlp_inter_mp(self, mp_replace, reversed_dim=False):
         # Only need to alter behavior if we can't do the normal destructive copy
         if self.module.mlp.inter_w is None:
+            # params = [
+            #     (self.module.mlp.inter_up_w, self.inter_up_w),
+            #     (self.module.mlp.inter_up_b, self.inter_up_b),
+            #     (self.module.mlp.inter_gate_w, self.inter_gate_w),
+            #     (self.module.mlp.inter_gate_b, self.inter_gate_b),
+            # ]
+            # for dst, src in params:
+            #     dst = mp_replace.copy(dst[:self.inter_up_w.shape[0] // mp_replace.mp_size],
+            #                           src,
+            #                           int8=reversed_dim,
+            #                           allocate_tensor=reversed_dim) if src is not None else None
             params = [
-                (self.module.mlp.inter_up_w, self.inter_up_w),
-                (self.module.mlp.inter_up_b, self.inter_up_b),
-                (self.module.mlp.inter_gate_w, self.inter_gate_w),
-                (self.module.mlp.inter_gate_b, self.inter_gate_b),
+                ("inter_up_w", "inter_up_w"),
+                ("inter_up_b", "inter_up_b"),
+                ("inter_gate_w", "inter_gate_w"),
+                ("inter_gate_b", "inter_gate_b"),
             ]
-            for dst, src in params:
-                dst = mp_replace.copy(dst[:self.inter_up_w.shape[0] // mp_replace.mp_size],
-                                      src,
+            for dst_name, src_name in params:
+                setattr(self.module.mlp, dst_name, mp_replace.copy(getattr(self.module.mlp, dst_name)[:self.inter_up_w.shape[0] // mp_replace.mp_size],
+                                      getattr(self, src_name),
                                       int8=reversed_dim,
-                                      allocate_tensor=reversed_dim) if src is not None else None
+                                      allocate_tensor=reversed_dim) if getattr(self, src_name) is not None else None)
         else:
             self.module.mlp.inter_w = mp_replace.strided_copy(self.module.mlp.inter_w,
                                                               self._h4h_w,

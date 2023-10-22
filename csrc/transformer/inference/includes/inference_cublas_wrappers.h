@@ -143,7 +143,8 @@ int cublas_gemm_ex(cublasHandle_t handle,
                    int b_stride = -1)
 #endif
 {
-    const int ldb = (b_stride == -1) ? ((transb == CUBLAS_OP_N) ? k : n) : b_stride;
+    // const int ldb = (b_stride == -1) ? ((transb == CUBLAS_OP_N) ? k : n) : b_stride;
+    const int ldb = (transb == CUBLAS_OP_N) ? k : n;
 #ifdef __HIP_PLATFORM_HCC__
     constexpr auto rocblas_dtype_16 = std::is_same<T, __half>::value ? rocblas_datatype_f16_r
                                                                      : rocblas_datatype_bf16_r;
